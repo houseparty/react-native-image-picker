@@ -154,17 +154,19 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
 
     if ([[self.options objectForKey:@"mediaType"] isEqualToString:@"video"]
         || [[self.options objectForKey:@"mediaType"] isEqualToString:@"mixed"]) {
-
-        if ([[self.options objectForKey:@"videoQuality"] isEqualToString:@"high"]) {
-            self.picker.videoQuality = UIImagePickerControllerQualityTypeHigh;
+        if (@available(iOS 11, *)) {
+            self.picker.videoExportPreset = AVAssetExportPresetPassthrough;
+        } else {
+            if ([[self.options objectForKey:@"videoQuality"] isEqualToString:@"high"]) {
+                self.picker.videoQuality = UIImagePickerControllerQualityTypeHigh;
+            }
+            else if ([[self.options objectForKey:@"videoQuality"] isEqualToString:@"low"]) {
+                self.picker.videoQuality = UIImagePickerControllerQualityTypeLow;
+            }
+            else {
+                self.picker.videoQuality = UIImagePickerControllerQualityTypeMedium;
+            }   
         }
-        else if ([[self.options objectForKey:@"videoQuality"] isEqualToString:@"low"]) {
-            self.picker.videoQuality = UIImagePickerControllerQualityTypeLow;
-        }
-        else {
-            self.picker.videoQuality = UIImagePickerControllerQualityTypeMedium;
-        }
-
         id durationLimit = [self.options objectForKey:@"durationLimit"];
         if (durationLimit) {
             self.picker.videoMaximumDuration = [durationLimit doubleValue];
@@ -410,7 +412,7 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
             if (storageOptions && [[storageOptions objectForKey:@"cameraRoll"] boolValue] == YES && self.picker.sourceType == UIImagePickerControllerSourceTypeCamera) {
                 ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];
                 if ([[storageOptions objectForKey:@"waitUntilSaved"] boolValue]) {
-                    [library writeImageToSavedPhotosAlbum:originalImage.CGImage metadata:[info valueForKey:UIImagePickerControllerMediaMetadata] completionBlock:^(NSURL *assetURL, NSError *error) {
+                    [library writeImageToSavedPhotosAlbum:originalImage.CGImage orientation:(ALAssetOrientation)[originalImage imageOrientation] metadata:[info valueForKey:UIImagePickerControllerMediaMetadata] completionBlock:^(NSURL *assetURL, NSError *error) {
                         if (error) {
                             NSLog(@"Error while saving picture into photo album");
                         } else {
@@ -460,7 +462,12 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
 
                 if (videoURL) { // Protect against reported crash
                   NSError *error = nil;
-                  [fileManager moveItemAtURL:videoURL toURL:videoDestinationURL error:&error];
+                  // If we have write access to the source file, move it. Otherwise use copy. 
+                  if ([fileManager isWritableFileAtPath:[videoURL path]]) {
+                      [fileManager moveItemAtURL:videoURL toURL:videoDestinationURL error:&error];
+                  } else {
+                      [fileManager copyItemAtURL:videoURL toURL:videoDestinationURL error:&error];
+                  }
                   if (error) {
                       self.callback(@[@{@"error": error.localizedFailureReason}]);
                       return;
