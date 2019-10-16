@@ -353,6 +353,8 @@ public class ImagePickerModule extends ReactContextBaseJavaModule
       if (pickBoth) 
       {
         libraryIntent.setType("image/* video/*");
+      } else {
+        libraryIntent.setType("image/*");
       }
     }
 
